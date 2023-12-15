@@ -1,0 +1,630 @@
+---
+title: "New-Final Project"
+author: "Alexandria deRosset"
+date: "`r Sys.Date()`"
+output: html_document
+---
+Findings Summary: 
+
+Car crashes in Raleigh, North Carolina, continue to be a problem as more drivers head back to the road in the wake of the COVID-19 pandemic. 
+
+Crashes in Raleigh occur at all times of day around the city. Crash hotspots are different when comparing nighttime crashes to daytime crashes. Weekends also bring a spike of crashes after midnight and before 5 a.m. Although fewer crashes occur at night, a higher percentage of those crashes are fatal. 
+
+Between Nov. 30, 2021 and Nov. 30, 2023, at least 89 people were killed in car accidents in the Raleigh area. Although this number accounts for 0.4% of all crashes, it is still a significant loss of life, with an average of 44.5 people dying each year in Raleigh as a result of car crashes. 
+
+The most common area for car crashes in Raleigh was Interstate 440, according to my analysis. Over 2,800 crashes occurred on the interstate in the past two years. That’s an average of 3.8 crashes each day on the beltline alone. 
+
+Another high-density crash area is the center of downtown, especially along South Dawson St., Edenton St., and South Blount St. South Dawson St. is part of the U.S. Route 401, also known as Capital Blvd. in Raleigh. 
+
+According to the North Carolina Department of Transportation, the average cost per person for car crashes in Wake County is $2,462, as of 2021. The average annual cost for Wake County is $2,833,377,533, the second highest in the state after Mecklenburg County. Such a high number of crashes takes a physical and financial toll on drivers. 
+
+For daytime drivers hoping to avoid the most dangerous roads, getting around the city efficiently might become difficult, as the interstate and major connecting roads are the sites of most of the crashes. If you do need to use the beltline and want the lowest chance of being in a car crash on a weekday, 10 a.m. is an ideal time to get on the road. Don’t linger, as crashes begin to rise again just after 11 a.m. On the weekends, you will have to be an early bird if you want to beat the crashes, with the lowest number occurring between 4 a.m. and 8:30 a.m. 
+
+Nighttime drivers are four times less likely to be in a car accident than daytime drivers in Raleigh. However, nighttime is not necessarily the safer time to drive. 1.45% of crashes at night resulted in fatalities, compared to 00.2% of crashes during the day which resulted in fatalities, according to my analysis.
+
+For both the nighttime fatality data and the daytime fatality data, about 45% appeared as NA values. I omitted this data from my calculation but because it is such a large percentage of the fatality data it could significantly impact the findings. Most drivers involved in crashes with no fatality data were recorded to be off the roadway. 
+
+At night, crashes tend to be consolidated in the center of the city, in the Glenwood South district, according to my analysis. Glenwood South, which is known as Raleigh’s nightlife hub, is home to a wide variety of bars and restaurants that attract young adults, according to the Downtown Raleigh Alliance. 
+
+Nighttime crashes are also concentrated along Capital Blvd. and Wade Ave., another popular road for leaving the city and getting onto the highway. 
+
+When I analyzed the data, I split it into crashes that occurred at night and during the day. Daytime data included crashes that occurred between 5 a.m. and 8 p.m. Nighttime crashes occurred after 8 p.m. but before 5 a.m. Overnight and early morning crashes were included in the nighttime data because a significant portion occurred on Saturdays and Sundays. I hypothesized that people involved in those crashes were likely heading home after a night out. 
+
+Because there were more hours included in the daytime filtering of the data, it is logical that there were more crashes during the day. In fact, there was an average of 34,190 crashes that took place during the day compared to 4,098 crashes at night over the two-year time span. There were about eight times more crashes that occurred during the day than at night.  
+
+Another thing I was interested in investigating was which car crashes occurred near schools. I hypothesized that schools would be a hotspot because they attract a considerable amount of drivers each day. I especially expected high schools to be hotspots because of their early start times and the concentration of inexperienced drivers at high schools is likely much higher than elsewhere in the city. I was unable to combine these two data into one map. I found, however, that a number of schools are concentrated in the center of the city, like the car crashes.
+ 
+When creating the visualizations for the traffic map, I first narrowed the data to include only data from Raleigh, North Carolina. When I plotted it, I realized that some of the coordinate points fell outside of Raleigh, despite being marked as inside of Raleigh. A large concentration of the dirty data fell within Smithfield. Other dirty data was concentrated along the same latitude line, but on the opposite side of the world. It appears that much of the dirty data was due to a misentering of one or two characters in the latitude and longitude. However, without the time to confirm each data point with the DOT, I decided to filter it out of the data set. Overall, just 3% of the total Raleigh crash data was filtered out, leaving me with 395,240 crash data points within Raleigh. I defined the borders of Raleigh based on the parameters set by Google Maps. 
+
+
+
+
+
+My Question: which roads are the most dangerous in Wake County?  - Where do most crashes occur? Is there a connection (beyond the road) between these crashes? 
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '~/Documents/MEJO570F23')
+```
+
+
+#load packages: 
+```{r}
+pacman::p_load(sf, tidyverse, readr)
+#don't forget to load readr before read_csv, i guess. 
+```
+
+#read the data
+##source: https://data.wake.gov/datasets/ral::reported-crash-locations/about
+```{r}
+crashes_full <- read_csv("Reported_Crash_Locations231210.csv",
+                         col_types = cols(
+                      OBJECTID = col_character(),
+                      key_crash = col_character(),
+                      DateOfCrash = col_datetime(
+                        format = "%Y/%m/%d %H:%M:%S%z"),
+                      UpdateDate = col_datetime(
+                        format = "%Y/%m/%d %H:%M:%S%z")
+                      )
+                         )
+```
+
+
+# make sure that turning date column into a date worked, and the update column
+```{r}
+str(crashes_full$DateOfCrash)
+str(crashes_full$UpdateDate)
+```
+
+#ok now, the timezone? 
+```{r}
+crashes_full$DateOfCrash <- with_tz(crashes_full$DateOfCrash)
+
+head(crashes_full$DateOfCrash)
+```
+#there are way too many dates in here, i want my data between nov 30, 2021 and nov 30, 2023
+```{r}
+  recent_crashes <- crashes_full %>%
+    filter (DateOfCrash >= as.Date("2021-11-30"), DateOfCrash <= as.Date("2023-11-30")
+    )
+
+head(recent_crashes)
+
+#wow i'm so happy that worked!
+```
+
+#oh I wonder how many roads people crashed on 
+```{r}
+counted_rec_crashes <-
+ count(recent_crashes,LocationRoadNameOn, sort = TRUE) 
+  
+counted_rec_crashes
+
+```
+
+#woah, that is a TON of crashes on 440. Figures honestly. I'm worried my data set is too big. 
+
+#oh man. i need to figure out which column means what and also clean up the data. I'm going to start by deciphering the column names: 
+
+https://connect.ncdot.gov/business/DMV/DMV%20Documents/DMV-349%20Instructional%20Manual.pdf - pg 46 has location info 
+the locations are like a sentence
+- LocationInNearIndicator -  goes w/location city column- was crash in or near Raleigh ( a checkbox ) combine those two columns? 
+- LocationRoadNameOn - road where crash happened 
+- LocationRoadNameAt - nearest intersecting road of where the crash happened in the direction indicated in previous column, less accurate than the roadname on i think
+
+
+#i'm going to start by narrowing it down to raleigh 
+
+```{r}
+recent_raleigh_crashes <- recent_crashes %>%
+  filter (LocationInNearIndicator == "In", LocationCity == "RALEIGH"
+    )
+
+head (recent_raleigh_crashes)
+
+
+#ok sweet..... now that it is narrowed down to raleigh, maybe get rid of the na values? 
+```
+
+#how many crashes per road? 
+```{r}
+#recent_raleigh_crashes %>% 
+#group_by("LocationRoadNameOn")
+
+counted_raleigh <- 
+ count(recent_raleigh_crashes,LocationRoadNameOn, sort = TRUE) 
+
+counted_raleigh 
+
+#lolz 77 crashes at the same walmart, feels like a lot
+```
+#I'm going to make the column names nicer
+```{r}
+counted_raleigh <- 
+  janitor::clean_names(crash_locations)
+
+counted_raleigh
+```
+#making a scatterplot to see if there are any outliers 
+```{r}
+raleigh_plot <- 
+  ggplot(counted_raleigh, aes (x = latitude, y = longitude) ) + 
+  geom_point()  + 
+  scale_x_continuous() + scale_y_continuous()
+
+print(raleigh_plot)
+
+```
+#there are some weird little sections on this map.... 
+
+#i want to make sure that all the coordinates are within raleigh. Going to arrange to see highest and lowest lats and longitudes, should be near 35.7796° N, 78.6382° W. 
+```{r}
+counted_raleigh %>%
+  arrange(latitude)
+
+#ok a ton of these points are in smithfield (looks like that on the map too)
+#35.71998	-78.54426	SLOPESIDE CT - everything BEFORE this value is outside of raleigh (I checked coordiantes on google maps, and looked at city borders) also after this points street names match with coordinate locations. SO: need to get rid of all the lats that are less than 35.71998
+
+counted_raleigh %>%
+  arrange(desc(latitude)) #everything BEFORE this value (35.97070	-78.55660	OLD FALLS OF NEUSE RD	) is outside of Raleigh 
+
+#so for latitutude must be greater than (35.71998	-78.54426	SLOPESIDE CT) and less than (35.97070	-78.55660	OLD FALLS OF NEUSE RD)
+
+#checking the longitude also
+counted_raleigh %>%
+  arrange(longitude)
+#this one isn't so bad - everything BEFORE this value (35.89700	-78.81910	PAGE RD) is outside of raleigh 
+#everything after this value (35.72310	-78.496550	8500 BATTLE BRIDGE RD) is outside of raleigh
+
+counted_raleigh %>%
+  arrange(desc(longitude)) 
+
+```
+
+#now lets try filtering out the lats and longs and see if that gives us data that is w/in raleigh 
+
+```{r}
+
+counted_raleigh <- 
+  counted_raleigh %>%
+filter(latitude >= 35.71998, latitude <=35.97070 ) %>%
+filter(longitude >= -78.81910, longitude <= -78.496550)
+#checked it with my map down below - raleigh_traffic_map 
+
+counted_raleigh
+
+```
+
+#i'm trying something new - im going to put the long and lat of each crash into a new df, then combine those into one point, then find a way to give that point a road name  
+```{r}
+
+crash_locations <-select(counted_raleigh, latitude, longitude, location
+)
+
+crash_locations <- crash_locations %>%
+  rename(location = location, latitude = latitude, longitude = longitude) 
+
+str(crash_locations)
+
+crash_locations <- 
+mutate(crash_locations, coordinates = paste (latitude, longitude))
+
+crash_locations
+
+```
+
+
+
+# i want to try plotting my coordinates to make sure that it works that way 
+
+```{r}
+library(leaflet)
+
+test_map <- leaflet() %>%
+  addTiles() %>%
+  setView(lng=-79.0193, lat=35.7596, zoom = 6)
+
+#note to self - i want the traffic theme on my map later 
+#nc coordinates - 35.7596° N, 79.0193° W 
+```
+
+#ok now I guess I need to turn the latitude and longitude into coordinate points and zoom into raleigh
+
+```{r}
+raleigh_traffic_map <- leaflet(crash_locations) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 10) %>%
+  addCircles(lng=~longitude, 
+             lat=~latitude, 
+             weight = 3, 
+             radius=5,
+             color="red", 
+             stroke = TRUE, 
+             fillOpacity = 0.1) 
+
+#woah, this is so overwhelming, maybe it would be better to look at where crashes did NOT occur
+#also its so cool how u can basically see the map of raleigh outlined by car crashes, esp the beltline
+
+raleigh_traffic_map_2 <- 
+  leaflet(crash_locations) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 10) %>%
+  addCircleMarkers(lng=~longitude, 
+             lat=~latitude, 
+             popup = ~location, 
+             weight = 3, 
+             radius=2,
+              color= "pink", 
+             stroke = FALSE, 
+             fillOpacity = 0.07) 
+
+#I like how the lower opacity makes the crashes less overwhelming to look at but its harder to see when u zoom in 
+```
+
+
+
+# I want to highlight the hotzones of crashes in a different color. How do I do that? Wait use list from above. hang on.... 
+```{r}
+crash_locations_counted <- 
+count(crash_locations,location, sort = TRUE) 
+
+crash_locations_counted
+
+
+counted_plot <-
+  ggplot( crash_locations_counted, aes (x = location, y = n, fill = frequency(n) )) +
+  geom_jitter (width = 0.2, height = 0) + 
+  scale_x_discrete(breaks = seq(1, by = 2)) +
+  scale_fill_gradient(low = "white", high = "red") 
+
+#geom_count (( color= "blue", size = 1, alpha = 0.3) + 
+  #theme(axis.text.x = element_text(angle = 90, hjust = .5, size = 2)))
+
+
+print(counted_plot)
+#this doesn't really work tbh 
+#I need to find another way to visualize... 
+
+
+
+```
+#do accidents occur in different spots based on the time of day? will need to start by getting dates squared away. 
+```{r}
+as.numeric(recent_crashes$DateOfCrash)
+
+as.POSIXct(0)
+
+recent_crashes %>%
+  summarise(oldest = min(DateOfCrash))
+
+recent_crashes %>%
+  summarise(newest = max(DateOfCrash))
+#dates are within ranges I set, I want to filter out the lats and longs that are not within raleigh again (I feel like there is a more effecient way to do this)
+
+recent_crashes
+
+recent_crashes <- recent_crashes %>%
+  rename(location = LocationRoadNameOn, latitude = LocationLatitude, longitude = LocationLongitude) 
+  
+recent_crashes <- recent_crashes %>%
+filter(latitude >= 35.71998, latitude <=35.97070 ) %>%
+filter(longitude >= -78.81910, longitude <= -78.496550)
+#its giving me an error message but columns have been renamed.... I think its fine 
+
+#and now I want to make sure everything is still there 
+
+head( recent_crashes)
+
+#I wonder if most recent crash has changed 
+
+recent_crashes %>%
+slice_max(DateOfCrash)
+```
+#now to make the plot.... 
+```{r}
+
+library(ggridges)
+
+recent_crashes %>%
+  transmute(Crash_Date_Hour = hour(DateOfCrash)) 
+
+time_recent_crashes <- recent_crashes %>%
+  mutate(
+    dow = wday(DateOfCrash, label = T, abbr = T),
+    hour = hour(DateOfCrash))
+
+ggplot(time_recent_crashes, aes(x = hour, y = dow, height =  after_stat(density))) +
+  ggridges::geom_density_ridges(stat = "density")  + 
+  scale_x_continuous(breaks = seq(0, 24, by = 1)) +
+  scale_fill_viridis_c()+ 
+  theme_linedraw()
+
+
+
+
+
+```
+#it looks like most crashes are occuring at night, except with a spike on Saturday & Sunday mornings (well it would really be Friday after midnight and Saturday after midnight (so could be related to drunk drivers)) I will consider anything between 5 and 20h to be the day and anything between 20 - 24h and 0 - 5h to be the night. 
+
+# I want to seperate the night crashes and the day crashes into seperate data so I can map accordingly 
+```{r}
+
+head(time_recent_crashes)
+
+day_crashes <- time_recent_crashes %>%
+  filter(hour <= 20, hour >=5)
+
+day_crashes %>%
+  summarise(min(hour))
+
+day_crashes %>%
+  summarize(max(hour))
+  
+night_crashes <- time_recent_crashes %>%
+  filter(hour < 5 | hour > 21)
+
+  head(night_crashes)
+  
+night_crashes %>%
+  summarize(max(hour))
+night_crashes %>%
+  summarise(min(hour))
+```
+#ok now to plot 
+```{r}
+raleigh_day_traffic_map <- 
+  leaflet(day_crashes) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 10) %>%
+  addCircleMarkers(lng=~longitude, 
+             lat=~latitude, 
+             popup = ~LocationRoadNameAt, 
+             weight = 4, 
+             radius=2,
+              color= "orange", 
+             stroke = FALSE, 
+             fillOpacity = 0.1) 
+
+raleigh_night_traffic_map <- 
+leaflet(night_crashes) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 10) %>%
+  addCircleMarkers(lng=~longitude, 
+             lat=~latitude, 
+             popup = ~LocationRoadNameAt, 
+             weight = 4, 
+             radius=2,
+              color= "navy", 
+             stroke = FALSE, 
+             fillOpacity = 0.1) 
+
+#ok so my prediction was correct, at night the crashes are downtown in the glenwood south area/warehouse district (where the bars are) and during the day the crashes seem to be mainly on the beltline/on commuting routes   
+
+```
+
+#are there hotspots during the day and night? 
+```{r}
+#install.packages("leaflet.extras")
+library(leaflet.extras)
+
+raleigh_day_heat <- 
+  leaflet(day_crashes) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 10) %>%
+  addHeatmap( data = day_crashes, 
+    lng=~longitude,
+     lat=~latitude,
+    radius = 5, 
+    blur= 10
+          ) 
+
+raleigh_night_heat <- 
+  leaflet(night_crashes) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 12) %>%
+  addHeatmap( data = day_crashes, 
+    lng=~longitude,
+     lat=~latitude,
+    radius = 6, 
+    blur= 10
+          ) %>%
+    addCircleMarkers(lng=~longitude, 
+             lat=~latitude, 
+             popup = ~LocationRoadNameAt, 
+             weight = 3, 
+             radius=2,
+              color= "navy", 
+             stroke = FALSE, 
+             fillOpacity = 0.07) 
+
+#the heat maps are sort of terrible for visualizing 
+```
+
+
+#now I am curious about the neighborhoods where these crashes are occuring, it looks like most are on the beltline or in the center of downtown. I wonder how many schools are nearby the crash sites. 
+
+```{r}
+
+schools <- sf::st_read("Public_Schools/Public_Schools.shp")
+
+head( schools)
+
+schools_plot <- 
+ggplot() + geom_sf(data= schools, color = "#1A3B28") 
+
+print(schools_plot)
+```
+
+#what is Raleigh's census code? 3755000
+
+#i hope this tidy census works 
+```{r}
+library(tidycensus)
+
+schoolpop <- get_acs(geography = "block group", 
+              variables = "B14003_001", 
+            state = "NC", 
+             county = "Wake", #Raleigh
+            year = 2022,
+              geometry=T)
+```
+
+#did tidycensus work? 
+```{r}
+
+schoolpop %>%
+group_by("county")
+
+schoolpop <- schoolpop %>%
+mutate(county = str_trim( NAME )) %>%
+  mutate(county = str_sub(county, 33 ,str_length(county )- 23  ) 
+         ) %>%
+  mutate(county = str_to_upper(county)) 
+
+print(schoolpop)
+
+
+ggplot(data = schoolpop) + 
+  geom_sf () + 
+  theme_light()
+
+ggplot () + geom_sf (data = schoolpop) + theme_light()
+```
+
+
+# I need a refresher of what data I have where -- 
+schoolpop = tidycensus data 
+schools - is the NC DAta 
+schools_plot is the plot of schools 
+counted_raleigh 
+raleigh_plot  - plot of counted raleigh data 
+crash_locations - includes coordinates for the counted raleigh
+
+#i want to overlay the crash locations with the schools plot 
+```{r}
+  ggplot () + 
+  geom_sf (data = schoolpop, 
+           aes(), color = "blue")  +
+  geom_sf(data=schools, color = "red")  + 
+  theme_minimal() 
+
+
+
+#each dot represents a school, so now I want to overlay the red dots onto my leaflet map is that possible? 
+
+
+```
+
+#now I want to see how that looks on top of the actual map 
+```{r}
+
+#st_geometry_type(schools$geometry)
+
+
+schools_map <- leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 10) 
+```
+
+
+#trying to do it here 
+```{r}
+
+print(class(schools)) # this is a shapefile (point)
+print(class(crash_locations)) #this is a tbl need to convert? 
+
+
+
+schools_coordinates <- mutate(schools, coordinates = st_coordinates (schools$geometry), names = paste(school_nam))
+  
+schools_coordinates <- schools_coordinates %>%
+  rename(x = coordinates...X.., y = coordinates...Y..  )
+#st_coordinates (schools$geometry) #so now its a matrix?? 
+
+schools_coordinates
+
+#coords <- expand.grid (x = 1:96, y = 1:96)
+#spatial_points <- SpatialPoints(coords)
+#spatial_points$coords <- as.vector(coords)
+
+
+
+print(class(schools_coordinates))
+head(schools_coordinates)
+head(coords)
+
+combo_map <- 
+  leaflet(crash_locations) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(-78.6382, 35.7796, zoom = 10) %>%
+  addCircleMarkers(lng=~longitude, 
+             lat=~latitude, 
+             popup =~location, 
+             weight = 3, 
+             radius=2,
+              color= "pink", 
+             stroke = FALSE, 
+             fillOpacity = 0.07) %>%
+  addSearchUSCensusBureau()
+
+#data = schools_coordinates,
+           #color = "red"
+        #popup = ~school_nam
+      
+
+#I was not able to create a combo map. I couldn't figure out how to properly convert/overlay these two or if there is even a way to do so. I tried to import GEOJson data, create and convert matrix, html files etc. I kept on running into errors. 
+
+
+```
+#random writing info : 
+```{r}
+head(recent_raleigh_crashes)
+
+recent_crashes %>%
+  group_by(killed)
+recent_crashes %>%
+  count (killed)
+
+class (recent_crashes$killed) 
+
+#89/21653 = 0.00411028494
+
+
+#how many days since ("2021-11-30") and ("2023-11-30")
+#730 days 
+
+crash_period <- (interval(with_tz("2021-11-30"), ("2023-11-30")))
+as.period(crash_period)
+
+
+count(day_crashes) #34190 . 34,190 crashes/16 hours = 2,136/hour / 730 days = 2.92
+count(night_crashes) #4098. 4098/8 hours = 512.25/hour / 730 days = 0.701
+
+
+#need to make a new column that is total crashes/killed to see rates of fatal crashes higher in the day or at night 
+
+day_crashes %>%
+  count(killed)
+
+#46 killed out of 18756, = 00.2 % 
+#15,438 are na out of 34,194 = .4514 - almost half 
+
+night_crashes %>%
+filter(!is.na(killed)) %>%
+  count(killed) 
+#33 killed out of 2,273 = 01.45% - crashes far deadlier at night 
+
+#1829 are na out of 4,102 = .4458 - almost half 
+
+
+night_crashes %>%
+filter(is.na(killed)) %>%
+  count (LocationRelationToRoad)
+
+day_crashes %>%
+  filter(is.na(killed)) %>%
+  count (LocationRelationToRoad)
+
+
+
+```
+
